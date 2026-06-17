@@ -96,6 +96,10 @@ export interface PerformanceMetrics {
   neutralRatePct?: number;
   avgStockReturnPct?: number;
   avgSimulatedReturnPct?: number;
+  avgBenchmarkReturnPct?: number;
+  avgExcessReturnPct?: number;
+  benchmarkWinRatePct?: number;
+  costPct?: number;
 
   stopLossTriggerRate?: number;
   takeProfitTriggerRate?: number;

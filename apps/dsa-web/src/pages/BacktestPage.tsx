@@ -173,6 +173,9 @@ const PerformanceCard: React.FC<{ metrics: PerformanceMetrics; title: string; la
       <MetricRow label={text.winRate} value={pct(metrics.winRatePct)} accent />
       <MetricRow label={text.avgSimulatedReturn} value={pct(metrics.avgSimulatedReturnPct)} />
       <MetricRow label={text.avgStockReturn} value={pct(metrics.avgStockReturnPct)} />
+      <MetricRow label={text.avgExcessReturn} value={pct(metrics.avgExcessReturnPct)} accent />
+      <MetricRow label={text.benchmarkWinRate} value={pct(metrics.benchmarkWinRatePct)} />
+      <MetricRow label={text.costPct} value={pct(metrics.costPct)} />
       <MetricRow label={text.stopLossTriggerRate} value={pct(metrics.stopLossTriggerRate)} />
       <MetricRow label={text.takeProfitTriggerRate} value={pct(metrics.takeProfitTriggerRate)} />
       <MetricRow label={text.avgDaysToFirstHit} value={metrics.avgDaysToFirstHit != null ? metrics.avgDaysToFirstHit.toFixed(1) : '--'} />
