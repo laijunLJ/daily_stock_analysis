@@ -60,6 +60,15 @@ services:
   analyzer:
     <<: *common
     container_name: stock-analyzer
+    # 每日批量分析比单股更吃内存（pandas + 并发 LLM/取数）。给它独立的更高内存上限，
+    # 避免批量跑到一半被 OOM 杀掉、丢失尾部股票（单股手动分析内存小，不受影响）。
+    # VPS 为 4GB，2G 上限留有充足余量。
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
 
   # FastAPI 模式
   server:
