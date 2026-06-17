@@ -369,7 +369,19 @@ class BacktestService:
         )
         if summary is None:
             return None
-        return self._summary_to_dict(summary)
+        summary_dict = self._summary_to_dict(summary)
+        # Honest-backtest metrics (benchmark + transaction-cost) are not persisted
+        # on BacktestSummary to avoid a DB schema migration; recompute them from
+        # the underlying result rows so the stored path exposes the same keys as
+        # the dynamic path.
+        self._attach_honest_metrics(
+            summary_dict,
+            scope=scope,
+            lookup_code=lookup_code,
+            eval_window_days=getattr(summary, "eval_window_days", None),
+            engine_version=engine_version,
+        )
+        return summary_dict
 
     def get_global_summary(self, *, eval_window_days: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """Return overall backtest metrics normalized for Agent memory consumers."""
@@ -632,6 +644,55 @@ class BacktestService:
             advice_breakdown_json=json.dumps(summary_data.get("advice_breakdown") or {}, ensure_ascii=False),
             diagnostics_json=json.dumps(summary_data.get("diagnostics") or {}, ensure_ascii=False),
         )
+
+    # Keys derived from honest-backtest computation (benchmark + transaction cost)
+    # that are NOT persisted on the BacktestSummary DB model.
+    _HONEST_METRIC_KEYS = (
+        "avg_benchmark_return_pct",
+        "avg_excess_return_pct",
+        "benchmark_win_rate_pct",
+        "cost_pct",
+    )
+
+    def _attach_honest_metrics(
+        self,
+        summary_dict: Dict[str, Any],
+        *,
+        scope: str,
+        lookup_code: Optional[str],
+        eval_window_days: Optional[int],
+        engine_version: str,
+    ) -> None:
+        """Recompute and overlay benchmark / transaction-cost metrics onto a
+        stored-summary dict, sourcing them from the underlying result rows.
+
+        These metrics are intentionally not stored on the BacktestSummary model
+        (that would require a live SQLite migration), so we re-derive them via
+        BacktestEngine.compute_summary over the same rows the rollup covers.
+        On any failure the keys are emitted as ``None`` rather than dropped, so
+        downstream consumers see a stable shape.
+        """
+        try:
+            result_code = None if scope == "overall" else lookup_code
+            ew = int(eval_window_days) if eval_window_days is not None else None
+            rows = self.repo.list_results(
+                code=result_code,
+                eval_window_days=ew,
+                engine_version=engine_version,
+            )
+            recomputed = BacktestEngine.compute_summary(
+                results=rows,
+                scope=scope,
+                code=lookup_code,
+                eval_window_days=ew if ew is not None else 0,
+                engine_version=engine_version,
+            )
+            for key in self._HONEST_METRIC_KEYS:
+                summary_dict[key] = recomputed.get(key)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to attach honest backtest metrics: %s", exc)
+            for key in self._HONEST_METRIC_KEYS:
+                summary_dict.setdefault(key, None)
 
     @staticmethod
     def _result_to_dict(

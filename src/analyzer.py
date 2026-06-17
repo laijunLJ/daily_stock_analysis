@@ -3112,6 +3112,26 @@ class GeminiAnalyzer:
 > 若上述字段为 N/A 或缺失，请明确写“数据缺失，无法判断”，禁止编造。
 """
 
+            analyst_metrics = (
+                earnings_data.get("analyst", {})
+                if isinstance(earnings_data, dict)
+                else {}
+            )
+            if isinstance(analyst_metrics, dict) and any(
+                analyst_metrics.get(key) is not None
+                for key in ("recommendation_key", "mean_target_price", "num_analysts")
+            ):
+                prompt += f"""
+### 分析师观点
+| 指标 | 数值 | 说明 |
+|------|------|------|
+| 评级 | {analyst_metrics.get('recommendation_key', 'N/A')} | 卖方综合评级口径 |
+| 平均目标价 | {analyst_metrics.get('mean_target_price', 'N/A')} | 卖方平均目标价 |
+| 分析师数 | {analyst_metrics.get('num_analysts', 'N/A')} | 覆盖该标的的分析师人数 |
+
+> 若上述字段为 N/A 或缺失，请明确写“数据缺失，无法判断”，禁止编造。
+"""
+
         capital_flow_block = (
             fundamental_context.get("capital_flow", {})
             if isinstance(fundamental_context, dict)

@@ -347,6 +347,22 @@ class YfinanceFundamentalAdapter:
             result.setdefault("earnings", {})["dividend"] = dividend_payload
             result["source_chain"].append("earnings.dividend:yfinance")
 
+        # ---------------- analyst block ----------------
+        # info already fetched above (zero extra network calls); surface the
+        # analyst consensus the prompt asks for but never received.
+        analyst_payload: Dict[str, Any] = {
+            "recommendation_key": info.get("recommendationKey"),
+            "mean_target_price": _safe_float(info.get("targetMeanPrice")),
+            "num_analysts": info.get("numberOfAnalystOpinions"),
+            "currency": dividend_currency,
+        }
+        if any(
+            analyst_payload.get(key) is not None
+            for key in ("recommendation_key", "mean_target_price", "num_analysts")
+        ):
+            result.setdefault("earnings", {})["analyst"] = analyst_payload
+            result["source_chain"].append("analyst:yfinance.info")
+
         # ---------------- belong_boards (sector + industry) ----------------
         belong_boards: List[Dict[str, Any]] = []
         sector_name = str(info.get("sector") or info.get("sectorDisp") or "").strip()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import os
 import re
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence
 
@@ -308,6 +309,28 @@ class BacktestEngine:
         avg_stock_return_pct = cls._average([r.stock_return_pct for r in completed])
         avg_simulated_return_pct = cls._average([r.simulated_return_pct for r in completed])
 
+        # Honest backtest: benchmark = buy-and-hold (stock_return_pct), and the
+        # strategy's timed return is charged a round-trip transaction cost so the
+        # comparison is not flattered by frictionless fills. Cost is read from the
+        # env (default 0.1% round-trip) instead of the Config dataclass so it can
+        # be tuned without touching the stored backtest schema.
+        cost_pct = cls._resolve_cost_pct()
+        benchmark_returns = [
+            r.stock_return_pct for r in completed if r.stock_return_pct is not None
+        ]
+        avg_benchmark_return_pct = cls._average(benchmark_returns)
+        excess_returns = [
+            (r.simulated_return_pct - cost_pct) - r.stock_return_pct
+            for r in completed
+            if r.simulated_return_pct is not None and r.stock_return_pct is not None
+        ]
+        avg_excess_return_pct = cls._average(excess_returns)
+        benchmark_win_rate_pct = (
+            round(sum(1 for v in benchmark_returns if v > 0) / len(benchmark_returns) * 100, 2)
+            if benchmark_returns
+            else None
+        )
+
         stop_applicable = [
             r
             for r in completed
@@ -378,6 +401,10 @@ class BacktestEngine:
             "neutral_rate_pct": neutral_rate_pct,
             "avg_stock_return_pct": avg_stock_return_pct,
             "avg_simulated_return_pct": avg_simulated_return_pct,
+            "avg_benchmark_return_pct": avg_benchmark_return_pct,
+            "avg_excess_return_pct": avg_excess_return_pct,
+            "benchmark_win_rate_pct": benchmark_win_rate_pct,
+            "cost_pct": cost_pct,
             "stop_loss_trigger_rate": stop_loss_trigger_rate,
             "take_profit_trigger_rate": take_profit_trigger_rate,
             "ambiguous_rate": ambiguous_rate,
@@ -639,6 +666,24 @@ class BacktestEngine:
             exit_price,
             exit_reason,
         )
+
+    @staticmethod
+    def _resolve_cost_pct() -> float:
+        """Round-trip transaction cost (percent) used to discount the strategy's
+        timed return. Read from BACKTEST_COST_PCT (default 0.1 = 0.1%). Falls back
+        to the default on any unparsable / negative value so the summary stays
+        well-defined regardless of environment hygiene.
+        """
+        raw = os.getenv("BACKTEST_COST_PCT")
+        if raw is None:
+            return 0.1
+        try:
+            value = float(str(raw).strip())
+        except (TypeError, ValueError):
+            return 0.1
+        if value < 0:
+            return 0.1
+        return value
 
     @staticmethod
     def _average(values: Iterable[Optional[float]]) -> Optional[float]:
