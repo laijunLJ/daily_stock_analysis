@@ -1154,7 +1154,7 @@ class NotificationService(
                 report_lines.extend([
                     f"### 📌 {labels['core_conclusion_heading']}",
                     "",
-                    f"**{signal_emoji} {signal_text}** | {localize_trend_prediction(result.trend_prediction, report_language)}",
+                    f"**{signal_emoji} {signal_text}** | {localize_trend_prediction(result.trend_prediction, report_language)}" + ((f" | 置信度：{result.confidence_level}" if report_language == 'zh' else f" | Confidence: {result.confidence_level}") if getattr(result, 'confidence_level', None) else ""),
                     "",
                     f"> **{labels['one_sentence_label']}**: {one_sentence}",
                     "",
