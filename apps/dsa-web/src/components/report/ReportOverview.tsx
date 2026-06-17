@@ -226,7 +226,7 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
                       <h3 className="mt-0.5 text-base font-semibold text-foreground">{text.relatedBoards}</h3>
                     </div>
 
-                    <div className="home-related-board-list flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
+                    <div className="home-related-board-list flex flex-wrap items-center gap-2">
                       {relatedBoards.map((board, index) => {
                         const boardName = normalizeBoardName(board.name);
                         const signal = boardSignals.get(boardName);

@@ -47,6 +47,11 @@ type StructuredMarketData = {
   indices: NonNullable<MarketReviewPayload['indices']>;
 };
 
+const fmtNum = (value: unknown, digits = 2): string => {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(n) ? n.toFixed(digits) : '-';
+};
+
 const isMarketReviewPayload = (value: unknown): value is MarketReviewPayload =>
   Boolean(value && typeof value === 'object');
 
@@ -518,9 +523,9 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
                         {marketData.indices.map((index) => (
                           <tr key={index.code || index.name}>
                             <td className="px-2 py-2 font-medium text-foreground">{index.name}</td>
-                            <td className="px-2 py-2 text-secondary-text">{index.current ?? '-'}</td>
-                            <td className="px-2 py-2 text-secondary-text">{index.changePct !== undefined ? `${index.changePct}%` : '-'}</td>
-                            <td className="px-2 py-2 text-secondary-text">{index.high ?? '-'} / {index.low ?? '-'}</td>
+                            <td className="px-2 py-2 text-secondary-text">{fmtNum(index.current)}</td>
+                            <td className="px-2 py-2 text-secondary-text">{index.changePct != null ? `${fmtNum(index.changePct)}%` : '-'}</td>
+                            <td className="px-2 py-2 text-secondary-text">{fmtNum(index.high)} / {fmtNum(index.low)}</td>
                           </tr>
                         ))}
                       </tbody>
