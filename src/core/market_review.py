@@ -12,7 +12,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, Optional
 import uuid
 
@@ -142,6 +142,7 @@ def run_market_review(
     save_report_file: bool = True,
     persist_history: bool = True,
     trigger_source: str = "cli",
+    target_date: Optional[date] = None,
 ) -> Optional[str] | Optional[MarketReviewRunResult]:
     """
     执行大盘复盘分析
@@ -285,6 +286,7 @@ def run_market_review(
                     query_id=history_query_id,
                     market_light_snapshots=market_light_snapshots,
                     market_review_payload=market_review_payload,
+                    target_date=target_date,
                 )
             
             # 推送通知（合并模式下跳过，由 main 层统一发送）
@@ -504,6 +506,7 @@ def _persist_market_review_history(
     query_id: Optional[str] = None,
     market_light_snapshots: Optional[Dict[str, Dict[str, Any]]] = None,
     market_review_payload: Optional[Dict[str, Any]] = None,
+    target_date: Optional[date] = None,
 ) -> int:
     """Persist market review output into the existing analysis history table."""
     try:
@@ -539,6 +542,11 @@ def _persist_market_review_history(
             "market_review_region": region,
             "report_language": report_language,
         }
+        if target_date is not None:
+            try:
+                context_snapshot["market_review_target_date"] = target_date.isoformat()
+            except Exception:
+                pass
         if market_light_snapshots:
             context_snapshot["market_light_snapshots"] = market_light_snapshots
         if market_review_payload:

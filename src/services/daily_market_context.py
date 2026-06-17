@@ -451,6 +451,7 @@ class DailyMarketContextService:
                 save_report_file=False,
                 persist_history=persist_market_review_history,
                 trigger_source="daily_market_context",
+                target_date=target_date,
             )
 
             if (
@@ -812,22 +813,33 @@ def _record_matches_target_date(
     require_query_id_match: bool = False,
     report_language: str = "zh",
 ) -> bool:
-    payload_date = _payload_trade_date(payload, region)
     language_matches = _record_report_language_matches(record, report_language)
+    if not language_matches:
+        return False
+
+    if require_query_id_match:
+        return _record_matches_query_id(record, current_query_id)
+
+    # Same-query reuse always wins (query-scoped path).
+    if _record_matches_query_id(record, current_query_id):
+        return True
+
+    # Authoritative match: the effective trading date stamped onto the record at
+    # generation time. This lets pre-/post-market analyses (whose wall-clock
+    # created_at differs from the effective trading session) reuse the same day's
+    # market review instead of regenerating it on every individual stock analysis.
+    snapshot = _loads_mapping(getattr(record, "context_snapshot", None))
+    stored_target_date = _coerce_date(snapshot.get("market_review_target_date"))
+    if stored_target_date is not None:
+        return stored_target_date == target_date
+
+    # Legacy fallback for records persisted before the target-date stamp existed.
+    payload_date = _payload_trade_date(payload, region)
     if payload_date is not None:
-        if require_query_id_match:
-            return _record_matches_query_id(record, current_query_id) and language_matches
-        return language_matches and (
-            payload_date == target_date
-            or _record_matches_query_id(record, current_query_id)
-        )
+        return payload_date == target_date
 
     created_date = _coerce_date(getattr(record, "created_at", None))
-    if require_query_id_match:
-        return _record_matches_query_id(record, current_query_id) and language_matches
-    return language_matches and (
-        created_date == target_date or _record_matches_query_id(record, current_query_id)
-    )
+    return created_date == target_date
 
 
 def _record_report_language_matches(record: Any, report_language: str) -> bool:
