@@ -56,7 +56,7 @@ from src.report_language import (
 )
 from src.schemas.decision_action import build_action_fields
 from src.schemas.report_schema import AnalysisReportSchema
-from src.market_context import get_market_role, get_market_guidelines
+from src.market_context import get_market_role, get_market_guidelines, detect_market
 from src.services.daily_market_context import format_daily_market_context_prompt_section
 from src.market_phase_prompt import format_market_phase_prompt_section
 
@@ -934,6 +934,19 @@ def stabilize_decision_with_structure(
 
         flow_bias, flow_reason = _capital_flow_bias_with_status(fundamental_context)
         if flow_bias == "unavailable":
+            # 主力资金流（capital_flow）是 A 股特有数据源。美股 / 港股结构性没有
+            # 这一项，因此不能因为它"不可用"就把买入降级——否则非 A 股标的几乎
+            # 永远无法给出买入结论。这里按市场区分：非 A 股仅记录"不适用"，不降级。
+            if detect_market(getattr(result, "code", "") or "") != "cn":
+                _set_decision_stability_unavailable(
+                    result,
+                    language,
+                    current_price=current_price,
+                    support=support,
+                    resistance=resistance,
+                    flow_status="not_applicable_non_cn_market",
+                )
+                return
             if isinstance(fundamental_context, dict) and "capital_flow" in fundamental_context:
                 if decision_type == "buy" or advice_decision_type == "buy":
                     _downgrade_buy_without_capital_flow(
@@ -1205,6 +1218,8 @@ def _capital_flow_bias_with_status(
 
 def _capital_flow_status_for_stability(reason: str, language: str) -> str:
     normalized = str(reason or "").strip().lower()
+    if "not_applicable" in normalized:
+        return "该市场无主力资金流数据（不影响结论）" if language == "zh" else "Capital flow not applicable for this market"
     if "not_supported" in normalized or "unsupported" in normalized or "not available" in normalized:
         return "市场资金流服务暂不支持" if language == "zh" else "Capital flow source unsupported"
     if "empty_stock_flow" in normalized or "missing" in normalized:
@@ -2114,6 +2129,34 @@ class GeminiAnalyzer:
             ),
         )
 
+    @staticmethod
+    def _market_output_guidance(stock_code: str, lang: str) -> str:
+        """市场相关的输出指引：货币单位、非 A 股不要求资金流、补充对应市场维度。
+
+        A 股返回空字符串（保持原行为不变）；美股/港股追加货币与维度指引。
+        """
+        market = detect_market(stock_code or "")
+        if market == "cn":
+            return ""
+        symbol = {"us": "$", "hk": "HK$"}.get(market, "$")
+        if lang == "en":
+            market_name_en = {"us": "US", "hk": "Hong Kong"}.get(market, "US")
+            return f"""
+
+## Currency unit & {market_name_en}-market dimensions
+- This is a {market_name_en} stock. Write every price point (ideal/secondary buy, stop loss, target) with the `{symbol}` symbol, NOT the Chinese unit "元". The "元" in the JSON examples is only a placeholder — replace it with `{symbol}`.
+- Capital flow (主力资金) is an A-share-only data source and does not apply here; do NOT downgrade a buy or demand "fund-flow confirmation" because it is missing.
+- Where the provided data supports it, add {market_name_en}-relevant dimensions: valuation (P/E, P/S, PEG vs. sector), analyst ratings & price targets, latest earnings & earnings quality, and the next earnings date. Never fabricate values that were not provided.
+"""
+        market_name_zh = {"us": "美股", "hk": "港股"}.get(market, "美股")
+        return f"""
+
+## 价格单位与{market_name_zh}分析维度
+- 本标的为{market_name_zh}，所有价格点位（理想买入/次优买入/止损/目标）请使用货币符号 `{symbol}`，不要使用“元”。示例 JSON 中的“元”只是占位符，请替换为 `{symbol}`。
+- 主力资金流为 A 股特有数据，{market_name_zh}不适用；不要因为缺少资金流数据而对买入结论降级或要求“资金面确认”。
+- 在所提供数据支持的前提下，补充{market_name_zh}相关维度：估值（P/E、P/S、PEG 及行业对比）、分析师评级与目标价、最近财报与盈利质量、下一次财报日期。未提供的数据不要编造。
+"""
+
     def _get_analysis_system_prompt(self, report_language: str, stock_code: str = "") -> str:
         """Build the analyzer system prompt with output-language guidance."""
         lang = normalize_report_language(report_language)
@@ -2139,6 +2182,7 @@ class GeminiAnalyzer:
                 .replace("{default_skill_policy_section}", default_skill_policy_section)
                 .replace("{skills_section}", skills_section)
             )
+        base_prompt += self._market_output_guidance(stock_code, lang)
         if lang == "en":
             return base_prompt + """
 

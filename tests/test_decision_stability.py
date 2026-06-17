@@ -13,9 +13,10 @@ def _result(
     score: int,
     current_price: float,
     change_pct: float = 0.0,
+    code: str = "002812",
 ) -> AnalysisResult:
     return AnalysisResult(
-        code="002812",
+        code=code,
         name="恩捷股份",
         sentiment_score=score,
         trend_prediction="看多" if decision_type == "buy" else "看空",
@@ -320,6 +321,48 @@ def test_preserves_sell_signal_when_significant_risk_exists_near_support() -> No
 
     assert result.decision_type == "sell"
     assert result.operation_advice == "卖出"
+
+
+def test_does_not_downgrade_us_buy_when_capital_flow_unavailable() -> None:
+    """美股没有主力资金流数据，买入不应因此被降级（修复：美股买入被错误压到观察）。"""
+    result = _result(
+        decision_type="buy",
+        operation_advice="买入",
+        score=66,
+        current_price=32.0,
+        code="AAPL",
+    )
+
+    stabilize_decision_with_structure(
+        result,
+        SimpleNamespace(support_levels=[30.0], resistance_levels=[34.0]),
+        _unsupported_fund_flow(),
+    )
+
+    assert result.decision_type == "buy"
+    assert result.operation_advice == "买入"
+    assert result.dashboard["decision_stability"]["applied"] is False
+    assert "不影响结论" in str(result.dashboard["decision_stability"]["capital_flow_status"])
+
+
+def test_does_not_downgrade_hk_buy_when_capital_flow_unavailable() -> None:
+    """港股同样没有主力资金流数据，买入不应因此被降级。"""
+    result = _result(
+        decision_type="buy",
+        operation_advice="买入",
+        score=66,
+        current_price=32.0,
+        code="HK00700",
+    )
+
+    stabilize_decision_with_structure(
+        result,
+        SimpleNamespace(support_levels=[30.0], resistance_levels=[34.0]),
+        _unsupported_fund_flow(),
+    )
+
+    assert result.decision_type == "buy"
+    assert result.operation_advice == "买入"
 
 
 def test_refines_hold_pullback_near_support_as_shakeout_watch() -> None:
