@@ -881,3 +881,60 @@ class BacktestService:
         summary["code"] = None if summary.get("code") == OVERALL_SENTINEL_CODE else summary.get("code")
         summary["computed_at"] = datetime.now().isoformat()
         return summary
+
+
+def format_historical_calibration_prompt_section(
+    global_summary: Optional[Dict[str, Any]],
+    stock_summary: Optional[Dict[str, Any]],
+    *,
+    code: Optional[str] = None,
+    report_language: str = "zh",
+) -> str:
+    """Render a backtest-derived calibration block for the analysis prompt.
+
+    Feeds the model the system's measured historical hit-rate so it can ground
+    ``confidence_level`` in reality instead of always returning a safe middle
+    value. Returns an empty string when there is no usable backtest history yet,
+    so the section simply does not appear until the daily backtest accrues data.
+    """
+    is_en = str(report_language).lower().startswith("en")
+
+    def _row(label_zh: str, label_en: str, summary: Optional[Dict[str, Any]]) -> Optional[str]:
+        if not isinstance(summary, dict):
+            return None
+        n = summary.get("completed_count") or summary.get("total_evaluations") or 0
+        acc = summary.get("direction_accuracy_pct")
+        if not n or acc is None:
+            return None
+        win = summary.get("win_rate_pct")
+        if is_en:
+            win_txt = f", win rate {win}%" if win is not None else ""
+            return f"- {label_en}: direction accuracy {acc}%{win_txt} (n={n})"
+        win_txt = f"、胜率 {win}%" if win is not None else ""
+        return f"- {label_zh}：方向准确率 {acc}%{win_txt}（样本 {n}）"
+
+    rows = []
+    g = _row("全局历史", "Overall history", global_summary)
+    if g:
+        rows.append(g)
+    code_label_zh = f"本股 {code}" if code else "本股"
+    code_label_en = f"This stock {code}" if code else "This stock"
+    st = _row(code_label_zh, code_label_en, stock_summary)
+    if st:
+        rows.append(st)
+    if not rows:
+        return ""
+
+    body = "\n".join(rows)
+    if is_en:
+        note = (
+            "Calibrate `confidence_level` against this real track record: do NOT mark "
+            "high when historical direction accuracy is weak (e.g. <=55%) or the sample "
+            "is small (<30); prefer a conservative level when the evidence is thin."
+        )
+        return f"\n## 📈 Historical calibration (backtest feedback)\n{body}\n{note}\n"
+    note = (
+        "请据此真实战绩校准 `confidence_level`：历史方向准确率偏低（如 ≤55%）或样本很少"
+        "（<30）时不要给「高」，证据不足时宁可保守。"
+    )
+    return f"\n## 📈 历史校准（回测反馈）\n{body}\n{note}\n"

@@ -3030,6 +3030,9 @@ class GeminiAnalyzer:
         )
         if daily_market_context_section:
             prompt += daily_market_context_section
+        historical_calibration_section = context.get("historical_calibration_section")
+        if isinstance(historical_calibration_section, str) and historical_calibration_section:
+            prompt += historical_calibration_section
         if isinstance(analysis_context_pack_summary, str) and analysis_context_pack_summary:
             prompt += analysis_context_pack_summary
         prompt += f"""

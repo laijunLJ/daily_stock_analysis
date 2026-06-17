@@ -567,6 +567,24 @@ class StockAnalysisPipeline:
             if portfolio_context is not None:
                 enhanced_context["portfolio_context"] = dict(portfolio_context)
             
+            if getattr(self.config, "agent_memory_enabled", False):
+                try:
+                    from src.services.backtest_service import (
+                        BacktestService,
+                        format_historical_calibration_prompt_section,
+                    )
+                    _bt_service = BacktestService(self.db)
+                    _calibration_section = format_historical_calibration_prompt_section(
+                        _bt_service.get_global_summary(),
+                        _bt_service.get_stock_summary(code),
+                        code=code,
+                        report_language=report_language,
+                    )
+                    if _calibration_section:
+                        enhanced_context["historical_calibration_section"] = _calibration_section
+                except Exception as _cal_exc:
+                    logger.debug("[historical_calibration] attach skipped: %s", _cal_exc)
+
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
             (
                 analysis_context_pack_summary,
