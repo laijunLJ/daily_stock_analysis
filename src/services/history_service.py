@@ -32,6 +32,7 @@ from src.report_language import (
 from src.storage import DatabaseManager
 from src.services.run_diagnostics import build_run_diagnostic_summary
 from src.market_phase_summary import extract_market_phase_summary
+from src.tv_rating_prompt import format_tv_rating_report_section
 from src.schemas.decision_action import build_action_fields
 from src.utils.sniper_points import find_sniper_points
 from src.utils.data_processing import (
@@ -822,6 +823,7 @@ class HistoryService:
                 risk_warning=raw_result.get("risk_warning", ""),
                 buy_reason=raw_result.get("buy_reason", ""),
                 market_snapshot=raw_result.get("market_snapshot"),
+                tv_rating=raw_result.get("tv_rating"),
                 search_performed=raw_result.get("search_performed", False),
                 data_sources=raw_result.get("data_sources", ""),
                 success=raw_result.get("success", True),
@@ -1024,6 +1026,14 @@ class HistoryService:
                         f"**{labels['chip_label']}**: {chip_unavailable_reason}",
                         "",
                     ])
+
+        # ========== TradingView 多周期技术评级（外部技术面参考；缺失则不渲染）==========
+        tv_report_section = format_tv_rating_report_section(
+            getattr(result, "tv_rating", None), report_language
+        )
+        if tv_report_section:
+            report_lines.append("")
+            report_lines.append(tv_report_section)
 
         # ========== 作战计划 ==========
         battle = dashboard.get('battle_plan', {}) if dashboard else {}

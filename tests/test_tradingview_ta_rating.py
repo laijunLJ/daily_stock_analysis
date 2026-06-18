@@ -14,7 +14,10 @@ import importlib.util
 import os
 import unittest
 
-from src.tv_rating_prompt import format_tv_rating_section
+from src.tv_rating_prompt import (
+    format_tv_rating_section,
+    format_tv_rating_report_section,
+)
 
 
 def _load_fetcher():
@@ -144,6 +147,38 @@ class FormatTvRatingSectionTest(unittest.TestCase):
         out = format_tv_rating_section(tv, "zh")
         self.assertIn("N/A/N/A/N/A", out)
 
+
+
+class FormatTvRatingReportSectionTest(unittest.TestCase):
+    def _sample(self):
+        return {
+            "symbol": "NASDAQ:MRVL",
+            "intervals_order": ["1W", "1d", "4h", "1h"],
+            "ratings": {
+                "1W": {"recommendation": "BUY", "recommendation_zh": "买入", "buy": 14, "sell": 3, "neutral": 9},
+                "1d": {"recommendation": "BUY", "recommendation_zh": "买入", "buy": 14, "sell": 2, "neutral": 10},
+                "4h": {"recommendation": "BUY", "recommendation_zh": "买入", "buy": 13, "sell": 3, "neutral": 10},
+                "1h": {"recommendation": "SELL", "recommendation_zh": "卖出", "buy": 6, "sell": 10, "neutral": 10},
+            },
+        }
+
+    def test_zh_report_render(self):
+        out = format_tv_rating_report_section(self._sample(), "zh")
+        self.assertIn("### 📐 TradingView 多周期技术评级", out)
+        self.assertIn("NASDAQ:MRVL", out)
+        self.assertIn("| 周线 | 买入(BUY) | 14/3/9 |", out)
+        self.assertIn("| 1小时 | 卖出(SELL) | 6/10/10 |", out)
+        # Report variant must NOT carry the prompt-only instruction text.
+        self.assertNotIn("不要据此单独给出确定性买卖点", out)
+
+    def test_en_report_render(self):
+        out = format_tv_rating_report_section(self._sample(), "en")
+        self.assertIn("TradingView Multi-Timeframe TA Rating", out)
+        self.assertIn("| Weekly | Buy | 14/3/9 |", out)
+
+    def test_report_fail_open(self):
+        self.assertEqual(format_tv_rating_report_section(None), "")
+        self.assertEqual(format_tv_rating_report_section({"ratings": {}}), "")
 
 if __name__ == "__main__":
     unittest.main()

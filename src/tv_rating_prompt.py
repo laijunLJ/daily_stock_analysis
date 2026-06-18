@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Prompt rendering for the TradingView multi-timeframe TA rating.
+"""Markdown rendering for the TradingView multi-timeframe TA rating.
 
 Kept dependency-light (stdlib + typing only) so it is fully unit-testable in
-isolation and so a problem here can only affect this one prompt section.
+isolation and so a problem here can only affect this one section.
 
-The input ``tv_rating`` dict is produced by
-``data_provider.tradingview_ta_fetcher.fetch_tv_rating``. Rendering is
-fail-open: any missing / malformed input returns ``""`` (no section emitted).
+Two renderers share the same table builder:
+* ``format_tv_rating_section``        -> the per-stock *analysis prompt* (model input)
+* ``format_tv_rating_report_section`` -> the *visible report* (drawer / markdown)
+
+Both are fail-open: any missing / malformed input returns ``""``.
+The ``tv_rating`` dict is produced by
+``data_provider.tradingview_ta_fetcher.fetch_tv_rating``.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 _TV_INTERVAL_LABEL_ZH = {
@@ -28,25 +32,17 @@ _TV_REC_ZH = {
 }
 
 
-def format_tv_rating_section(
-    tv_rating: Optional[Dict[str, Any]],
-    report_language: str = "zh",
-) -> str:
-    """Render the TradingView multi-timeframe TA rating as a prompt section.
-
-    Returns an empty string when no usable rating is present, so a missing or
-    failed fetch simply produces no section.
-    """
+def _build_rows(tv_rating: Any, is_en: bool) -> Optional[Tuple[List[str], str]]:
+    """Return (markdown_rows, symbol) or None when there is no usable rating."""
     if not isinstance(tv_rating, dict):
-        return ""
+        return None
     ratings = tv_rating.get("ratings")
     if not isinstance(ratings, dict) or not ratings:
-        return ""
+        return None
     order = tv_rating.get("intervals_order") or list(ratings.keys())
-    is_en = str(report_language).lower().startswith("en")
     label_map = _TV_INTERVAL_LABEL_EN if is_en else _TV_INTERVAL_LABEL_ZH
 
-    rows = []
+    rows: List[str] = []
     for interval in order:
         item = ratings.get(interval)
         if not isinstance(item, dict):
@@ -66,9 +62,20 @@ def format_tv_rating_section(
         )
         rows.append(f"| {period} | {rec_text} | {counts} |")
     if not rows:
-        return ""
+        return None
+    return rows, (tv_rating.get("symbol") or "")
 
-    symbol = tv_rating.get("symbol") or ""
+
+def format_tv_rating_section(
+    tv_rating: Optional[Dict[str, Any]],
+    report_language: str = "zh",
+) -> str:
+    """Render the rating as a section of the per-stock *analysis prompt* (model input)."""
+    is_en = str(report_language).lower().startswith("en")
+    built = _build_rows(tv_rating, is_en)
+    if built is None:
+        return ""
+    rows, symbol = built
     table = "\n".join(rows)
     sym_suffix = f" · {symbol}" if symbol else ""
 
@@ -93,4 +100,36 @@ def format_tv_rating_section(
         "> 说明：该评级是 TradingView 基于约 26 项振荡指标与均线对各周期的**机械汇总**，"
         "仅作为技术面的**外部参考信号之一**（不含基本面/新闻判断）。与上文其他技术信号或趋势分析"
         "冲突时，按“信号矛盾”处理并相应下调置信度，**不要据此单独给出确定性买卖点**。\n"
+    )
+
+
+def format_tv_rating_report_section(
+    tv_rating: Optional[Dict[str, Any]],
+    report_language: str = "zh",
+) -> str:
+    """Render the rating as a *visible* section for the analysis report (drawer/markdown)."""
+    is_en = str(report_language).lower().startswith("en")
+    built = _build_rows(tv_rating, is_en)
+    if built is None:
+        return ""
+    rows, symbol = built
+    table = "\n".join(rows)
+    sym_part = f" ｜ {symbol}" if symbol else ""
+
+    if is_en:
+        sym_part_en = f" | {symbol}" if symbol else ""
+        return (
+            "### 📐 TradingView Multi-Timeframe TA Rating\n"
+            f"> Source: TradingView aggregate technicals "
+            f"(~26 oscillators + moving averages; technical reference only){sym_part_en}\n\n"
+            "| Timeframe | Rating | Buy/Sell/Neutral |\n"
+            "|------|------|------|\n"
+            f"{table}\n"
+        )
+    return (
+        "### 📐 TradingView 多周期技术评级\n"
+        f"> 数据来源：TradingView 综合技术指标（约 26 项振荡指标 + 均线机械汇总，仅技术面参考）{sym_part}\n\n"
+        "| 周期 | 评级 | 买/卖/中性 |\n"
+        "|------|------|------|\n"
+        f"{table}\n"
     )

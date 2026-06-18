@@ -646,6 +646,12 @@ class StockAnalysisPipeline:
                     stream_progress_callback=_on_llm_stream,
                     analysis_context_pack_summary=analysis_context_pack_summary,
                 )
+                # 把 TradingView 评级带到结果上，随分析存档持久化、供报告渲染（fail-open）
+                if result is not None:
+                    try:
+                        result.tv_rating = enhanced_context.get("tv_rating")
+                    except Exception:
+                        pass
                 llm_duration_ms = int((time.monotonic() - llm_started_at) * 1000)
                 record_llm_run(
                     success=bool(result and getattr(result, "success", True)),

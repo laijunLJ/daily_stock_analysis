@@ -1558,6 +1558,7 @@ class AnalysisResult:
 
     # ========== 元数据 ==========
     market_snapshot: Optional[Dict[str, Any]] = None  # 当日行情快照（展示用）
+    tv_rating: Optional[Dict[str, Any]] = None  # TradingView 多周期技术评级（展示+持久化）
     raw_response: Optional[str] = None  # 原始响应（调试用）
     search_performed: bool = False  # 是否执行了联网搜索
     data_sources: str = ""  # 数据来源说明
@@ -1609,6 +1610,7 @@ class AnalysisResult:
             'risk_warning': self.risk_warning,
             'buy_reason': self.buy_reason,
             'market_snapshot': self.market_snapshot,
+            'tv_rating': self.tv_rating,
             'search_performed': self.search_performed,
             'success': self.success,
             'error_message': self.error_message,
