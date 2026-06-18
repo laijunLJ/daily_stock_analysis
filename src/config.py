@@ -732,6 +732,7 @@ class Config:
     agent_deep_research_budget: int = 30000  # Max token budget for deep research
     agent_deep_research_timeout: int = 180  # Max seconds for /research command before returning timeout
     agent_memory_enabled: bool = False  # Enable memory & calibration system
+    tv_rating_enabled: bool = True  # Inject TradingView multi-timeframe TA rating into per-stock prompt
     agent_skill_autoweight: bool = True  # Auto-weight skills by backtest performance
     agent_skill_routing: str = "auto"  # Skill routing: 'auto' (regime-based) or 'manual'
     agent_context_compression_enabled: bool = False  # Compress visible chat history before Agent calls
@@ -1534,6 +1535,7 @@ class Config:
                 minimum=30,
             ),
             agent_memory_enabled=os.getenv('AGENT_MEMORY_ENABLED', 'false').lower() == 'true',
+            tv_rating_enabled=os.getenv('TV_RATING_ENABLED', 'true').lower() == 'true',
             agent_skill_autoweight=(
                 os.getenv('AGENT_SKILL_AUTOWEIGHT')
                 or os.getenv('AGENT_STRATEGY_AUTOWEIGHT', 'true')

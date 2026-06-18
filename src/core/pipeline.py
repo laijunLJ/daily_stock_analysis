@@ -585,6 +585,16 @@ class StockAnalysisPipeline:
                 except Exception as _cal_exc:
                     logger.debug("[historical_calibration] attach skipped: %s", _cal_exc)
 
+            # TradingView 多周期技术评级（外部技术面参考信号；fail-open，绝不阻断分析）
+            if getattr(self.config, "tv_rating_enabled", True):
+                try:
+                    from data_provider.tradingview_ta_fetcher import fetch_tv_rating
+                    _tv_rating = fetch_tv_rating(code=code, market=market)
+                    if _tv_rating:
+                        enhanced_context["tv_rating"] = _tv_rating
+                except Exception as _tv_exc:
+                    logger.debug("[tv_rating] attach skipped: %s", _tv_exc)
+
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
             (
                 analysis_context_pack_summary,

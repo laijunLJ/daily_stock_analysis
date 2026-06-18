@@ -28,6 +28,7 @@ from src.agent.llm_adapter import (
     register_fallback_model_pricing,
 )
 from src.agent.skills.defaults import CORE_TRADING_SKILL_POLICY_ZH
+from src.tv_rating_prompt import format_tv_rating_section
 from src.config import (
     Config,
     extra_litellm_params,
@@ -3053,6 +3054,13 @@ class GeminiAnalyzer:
 | 均线形态 | {context.get('ma_status', unknown_text)} | 多头/空头/缠绕 |
 """
         
+        # TradingView 多周期技术评级（外部技术面参考信号；缺失则不渲染，fail-open）
+        tv_rating_section = format_tv_rating_section(
+            context.get("tv_rating"), report_language
+        )
+        if tv_rating_section:
+            prompt += tv_rating_section
+
         # 添加实时行情数据（量比、换手率等）
         if 'realtime' in context:
             rt = context['realtime']
